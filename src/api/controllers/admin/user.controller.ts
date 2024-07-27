@@ -21,7 +21,11 @@ const addUser = {
                     .length(10)
                     .allow("", null),
                 user_type: Joi.string()
-                    .valid(...Object.values(USER_TYPE))
+                    .valid(
+                        USER_TYPE.ADMIN,
+                        USER_TYPE.EMPLOYEE,
+                        USER_TYPE.MANAGER
+                    )
                     .required(),
                 role: Joi.string().allow(null, ""),
             })
@@ -30,11 +34,12 @@ const addUser = {
     [CONTROLLER]: async (req, res) => {
         const { name, email, mobile, user_type, role } = req.body;
         const foundUser = await User.findOne({ $or: [{ email }, { mobile }] });
+        // console.log(">>> USER FOUND :", foundUser)
         if (foundUser)
             return sendResponse(
                 res,
                 {},
-                `Client with same ${
+                `User with same ${
                     foundUser.mobile == mobile ? "mobile" : "email"
                 } already exists`,
                 false,
@@ -66,4 +71,85 @@ const addUser = {
     },
 };
 
-export { addUser };
+const getUserList = {
+    [VALIDATOR]: celebrate({
+        query: Joi.object()
+            .keys({
+                search_term: Joi.string().lowercase().allow("", null),
+                sort_field: Joi.string().trim().allow(null, ""),
+                sort_order: Joi.string().valid("asc", "desc").trim().allow(""),
+                per_page: Joi.number().integer().min(1).max(1000).required(),
+                page_number: Joi.number().integer().min(1).max(1000).required(),
+            })
+            .required(),
+    }),
+    [CONTROLLER]: async (req, res) => {
+        const {
+            search_term = "",
+            sort_field = "createdAt",
+            sort_order = "desc",
+            per_page = 10,
+            page_number = 1,
+        } = req.query;
+        const query: any = {};
+        if (search_term) {
+            query.$or = [
+                { name: new RegExp(search_term, "i") },
+                { email: new RegExp(search_term, "i") },
+            ];
+        }
+
+        // Building sort options
+        const sortOptions: any = {};
+        sortOptions[sort_field] = sort_order === "asc" ? 1 : -1;
+        // Pagination options
+        const limit = parseInt(per_page as string, 10);
+        const skip = (parseInt(page_number as string, 10) - 1) * limit;
+
+        // Fetching users
+        const users = await User.find(query)
+            .select([
+                "_id",
+                "name",
+                "email",
+                "user_type",
+                "status",
+                "last_login",
+                "slug",
+            ])
+            .populate("role", "_id role is_active")
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(limit);
+        // Fetching total count for pagination
+        const totalUsers = await User.countDocuments(query);
+        const result = {
+            users,
+            total_users: totalUsers,
+            page_number: parseInt(page_number as string, 10),
+            per_page: limit,
+        };
+        return sendResponse(
+            res,
+            result,
+            "Users list got successfully",
+            true,
+            httpStatus.OK
+        );
+    },
+};
+
+
+const getUserTypesDropdown = {
+    [CONTROLLER]: async (req, res) => {
+        return sendResponse(
+            res,
+            Object.values(USER_TYPE),
+            "Roles found successfully",
+            true,
+            httpStatus.OK
+        );
+    },
+};
+
+export { addUser, getUserList,getUserTypesDropdown };

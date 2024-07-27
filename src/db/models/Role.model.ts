@@ -4,23 +4,17 @@ const { Schema } = mongoose;
 const roleSchema = new Schema({
     role: {
         type: String,
+        unique: true,
         required: true
     },
     desc: {
-        type: String
+        type: String,
+        default: null
     },
     is_active: {
         type: Boolean,
         default: true
     },
-    users: [{
-        type: Schema.Types.ObjectId,
-        ref: 'User'
-    }],
-    permissions: [{
-        type: Schema.Types.ObjectId,
-        ref: 'Permission'
-    }]
 },{
     collection: 'roles'
 });
