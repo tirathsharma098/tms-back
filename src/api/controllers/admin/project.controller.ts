@@ -2,67 +2,52 @@ import { Joi, celebrate } from "celebrate";
 import { CONTROLLER, VALIDATOR } from "../../../utils/constants";
 import { sendResponse } from "../../../utils/sendResponse";
 import httpStatus from "http-status";
-import { Role } from "../../../db/models/Role.model";
+import { TaskType } from "../../../db/models/TaskType.model";
+import { Project } from "../../../db/models/Project.model";
 
-const addRole = {
+const addProject = {
     [VALIDATOR]: celebrate({
         body: Joi.object()
             .keys({
-                role: Joi.string().required(),
+                name: Joi.string().required(),
                 desc: Joi.string().allow(null, ""),
+                start_date: Joi.date().raw().required(),
+                hours_allocated: Joi.number().integer().min(1).required(),
+                deadline: Joi.date().raw().required(),
             })
             .required(),
     }),
     [CONTROLLER]: async (req, res) => {
-        const { role, desc } = req.body;
-        const foundRole = await Role.findOne({ role });
-        if (foundRole)
+        const { name, desc, start_date, hours_allocated, deadline } = req.body;
+        const foundProject = await Project.findOne({ name });
+        if (foundProject)
             return sendResponse(
                 res,
                 {},
-                "Same role already exists",
+                "Project with same name already exists",
                 false,
                 httpStatus.OK
             );
-        const newRole = new Role({
-            role,
+        const newProject = new Project({
+            name,
             desc: desc || null,
+            start_date,
+            hours_allocated,
+            deadline,
         });
-        const roleSaved = await newRole.save();
+        const projectSaved = await newProject.save();
         // const clientSaved = await userRepo.save(newUser);
         return sendResponse(
             res,
-            { role: roleSaved },
-            "New role added successfully",
+            projectSaved,
+            "New project added successfully",
             true,
             httpStatus.OK
         );
     },
 };
 
-
-const getRoleDropdown = {
-    [CONTROLLER]: async (req, res) => {
-        const foundRole = await Role.find({}, '_id role');
-        if (!foundRole)
-            return sendResponse(
-                res,
-                {},
-                "Role not found",
-                false,
-                httpStatus.OK
-            );
-        return sendResponse(
-            res,
-            foundRole,
-            "Roles found successfully",
-            true,
-            httpStatus.OK
-        );
-    },
-};
-
-const getRoleList = {
+const getProjectList = {
     [VALIDATOR]: celebrate({
         query: Joi.object()
             .keys({
@@ -86,7 +71,7 @@ const getRoleList = {
         if (search_term) {
             query.$or = [
                 { name: new RegExp(search_term, "i") },
-                { email: new RegExp(search_term, "i") },
+                { desc: new RegExp(search_term, "i") },
             ];
         }
 
@@ -98,31 +83,36 @@ const getRoleList = {
         const skip = (parseInt(page_number as string, 10) - 1) * limit;
 
         // Fetching users
-        const roles = await Role.find(query)
+        const allPrj = await Project.find(query)
             .select([
                 "_id",
-                "role",
+                "name",
+                "desc",
+                "time_spent",
+                "hours_allocated",
+                "start_date",
+                "deadline",
+                "is_active",
             ])
             .sort(sortOptions)
             .skip(skip)
             .limit(limit);
         // Fetching total count for pagination
-        const totalUsers = await Role.countDocuments(query);
+        const allPrjCount = await Project.countDocuments(query);
         const result = {
-            roles,
-            total_roles: totalUsers,
+            items: allPrj,
+            total_items: allPrjCount,
             page_number: parseInt(page_number as string, 10),
             per_page: limit,
         };
         return sendResponse(
             res,
             result,
-            "Users list got successfully",
+            "Project list got successfully",
             true,
             httpStatus.OK
         );
     },
 };
 
-
-export { addRole, getRoleDropdown, getRoleList };
+export { addProject, getProjectList };
